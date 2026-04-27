@@ -1,0 +1,47 @@
+paths:
+  data_dir: data
+  artifact_dir: artifacts
+
+experiment:
+  seed: 42
+  cv_splits: 5
+
+training:
+  tune_models: true
+  tune_model_trials: 18
+  tune_blend_weights: true
+  tune_blend_trials: 24
+
+models:
+  rf:
+    n_estimators: 1200
+    max_depth: 7
+    min_samples_leaf: 2
+    min_samples_split: 4
+    criterion: entropy
+  et:
+    n_estimators: 1600
+    max_depth: 8
+    min_samples_leaf: 2
+    min_samples_split: 4
+  cb:
+    iterations: 1500
+    learning_rate: 0.03
+    depth: 6
+    l2_leaf_reg: 5
+    loss_function: Logloss
+
+blend:
+  fixed_weights:
+    rf_wcg: 0.34
+    et_wcg: 0.33
+    cb_wcg: 0.33
+
+outputs:
+  generate_submissions:
+    rf: true
+    et: true
+    cb: true
+    blend_equal: true
+    blend_fixed: true
+    blend_optuna: true
