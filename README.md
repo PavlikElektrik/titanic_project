@@ -7,6 +7,16 @@
 - авто-выбор лучшей модели
 - генерация submission CSV
 
+## Что этот проект должен показать
+
+Здесь важно не просто получить хороший скор, а показать полный и понятный Kaggle-процесс:
+
+- сначала читаем постановку задачи и метрику
+- затем выбираем простой, объяснимый бейзлайн
+- отдельно объясняем, зачем нужен WCG-режим и где он опасен
+- сохраняем артефакты, чтобы ревьюер видел ход экспериментов
+- пишем код так, чтобы его можно было переиспользовать в следующем соревновании
+
 ## Структура
 
 - data/ - исходные файлы train.csv и test.csv
@@ -21,6 +31,21 @@
 - src/wcg/training.py - CV, OOF-бленды, генерация submission
 - src/run_pipeline.py - единый запуск всего пайплайна
 - artifacts/ - результаты (создается автоматически)
+
+## Как читать проект
+
+Сначала открой [docs/kaggle_playbook.md](docs/kaggle_playbook.md) — это общий шаблон для решения Kaggle-соревнований.
+
+Потом прочитай [docs/titanic_rationale.md](docs/titanic_rationale.md) — там объяснено, почему для Titanic выбран именно такой бейзлайн и почему WCG-режим вынесен отдельно.
+
+После этого смотри на код в таком порядке:
+
+- `src/run_pipeline.py` - единая точка входа
+- `src/train_and_submit.py` - основной честный пайплайн
+- `src/train_kaggle_wcg.py` - режим с групповой эвристикой и тюнингом
+- `src/wcg/features.py` - как строятся признаки
+- `src/wcg/models.py` - почему в модели входят именно эти алгоритмы
+- `src/wcg/training.py` - как устроены CV, OOF и блендинг
 
 ## Установка
 
@@ -102,6 +127,8 @@ python src/run_pipeline.py
 - artifacts/reports/train_summary.json
 - artifacts/reports/wcg_tuning_summary.json
 - artifacts/submissions/submission_*.csv
+
+Если ты готовишь проект для ревью, начни именно с `artifacts/reports/train_summary.json` и `artifacts/reports/wcg_tuning_summary.json`: в них должен быть виден смысл решений, а не только числа.
 
 Готовый submission загружается в Kaggle как есть.
 

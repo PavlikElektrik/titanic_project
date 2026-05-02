@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Titanic training entry point that enables the WCG baseline and blending."""
+
 import argparse
 import json
 from pathlib import Path
@@ -20,10 +22,12 @@ from wcg.training import (
 
 
 def _resolve_cfg_value(cli_value, cfg_value):
+    """Prefer CLI overrides when present, otherwise fall back to the YAML config."""
     return cli_value if cli_value is not None else cfg_value
 
 
 def main() -> None:
+    """Run the WCG experiment end to end and save reports plus submissions."""
     parser = argparse.ArgumentParser(description="Titanic WCG training with external config files.")
     parser.add_argument("--config", type=str, default="configs/wcg/default.yaml")
     parser.add_argument("--data-dir", type=str, default=None)

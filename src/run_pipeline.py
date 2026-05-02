@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Convenience launcher that runs the Titanic EDA and training scripts in order."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +19,7 @@ COMMANDS = [
 
 
 def main() -> None:
+    """Run the full Titanic workflow from EDA to model training."""
     for cmd in COMMANDS:
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, cwd=ROOT, check=True)

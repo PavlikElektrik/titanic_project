@@ -1,3 +1,5 @@
+"""Titanic feature engineering, preprocessing, and baseline model utilities."""
+
 from __future__ import annotations
 
 import argparse
@@ -40,6 +42,7 @@ FEATURE_COLS = CAT_COLS + NUM_COLS
 
 
 def extract_title(name: str) -> str:
+    """Extract a normalized passenger title from the name field."""
     title = pd.Series(name).str.extract(r" ([A-Za-z]+)\\.", expand=False).iloc[0]
     if pd.isna(title):
         return "Unknown"
@@ -67,16 +70,19 @@ def extract_title(name: str) -> str:
 
 
 def extract_surname(name: str) -> str:
+    """Extract a lower-cased surname to support group-based features."""
     surname = pd.Series(name).str.extract(r"^([^,]+),", expand=False).iloc[0]
     return surname.strip().lower() if isinstance(surname, str) else "unknown"
 
 
 def get_ticket_group_sizes(train_df: pd.DataFrame, test_df: pd.DataFrame) -> pd.Series:
+    """Count how common each ticket is across train and test."""
     all_tickets = pd.concat([train_df["Ticket"], test_df["Ticket"]], axis=0)
     return all_tickets.value_counts(dropna=False)
 
 
 def _fit_imputation_stats(train_part: pd.DataFrame) -> Dict[str, object]:
+    """Collect robust training-only statistics used to fill missing values."""
     tmp = train_part.copy()
     tmp["Title"] = tmp["Name"].apply(extract_title)
 
@@ -103,6 +109,7 @@ def _apply_base_features(
     ticket_group_sizes: pd.Series,
     stats: Dict[str, object],
 ) -> pd.DataFrame:
+    """Build the core Titanic features from raw columns and train-only statistics."""
     out = df.copy()
 
     out["Title"] = out["Name"].apply(extract_title)
@@ -144,6 +151,7 @@ def _apply_base_features(
 
 
 def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: float = 3.0) -> Dict[str, object]:
+    """Estimate smoothed survival priors for surname and ticket groups."""
     tmp = train_part[["Surname", "Ticket"]].copy()
     tmp["Survived"] = y_train_part.values
     global_rate = float(y_train_part.mean())
@@ -162,6 +170,7 @@ def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: f
 
 
 def apply_group_priors(df: pd.DataFrame, priors: Dict[str, object]) -> pd.DataFrame:
+    """Attach the group survival priors to a feature frame."""
     out = df.copy()
     global_rate = float(priors["global_rate"])
 
@@ -183,6 +192,7 @@ def make_features(
     y_fit: pd.Series,
     ticket_group_sizes: pd.Series,
 ) -> pd.DataFrame:
+    """Create model-ready Titanic features using train-fit statistics only."""
     stats = _fit_imputation_stats(fit_df)
     fit_base = _apply_base_features(fit_df, ticket_group_sizes, stats)
     transform_base = _apply_base_features(transform_df, ticket_group_sizes, stats)
@@ -194,6 +204,7 @@ def make_features(
 
 
 def build_sklearn_pipeline(model_name: str) -> Pipeline:
+    """Construct the preprocessing + estimator pipeline for a named model."""
     categorical_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -245,6 +256,7 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
 
 
 def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd.Series, n_splits: int) -> pd.DataFrame:
+    """Evaluate all baseline models with stratified CV and report accuracy/AUC."""
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=SEED)
 
     scores = {

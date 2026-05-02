@@ -1,3 +1,5 @@
+"""Feature engineering for Titanic, including the optional WCG group signal."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -20,6 +22,7 @@ FEATURES = [
 
 
 def build_group_survival_feature(train_df: pd.DataFrame, test_df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """Build a heuristic group-survival feature from family and ticket structure."""
     all_data = pd.concat([train_df.copy(), test_df.copy()], sort=False).reset_index(drop=True)
     all_data["Surname"] = all_data["Name"].str.extract(r"^([^,]+),", expand=False).fillna("Unknown")
     all_data["GroupSurvival"] = 0.5
@@ -60,6 +63,7 @@ def build_group_survival_feature(train_df: pd.DataFrame, test_df: pd.DataFrame) 
 
 
 def preprocess_with_wcg(df: pd.DataFrame, group_survival: pd.Series, fit_stats: dict | None = None) -> tuple[pd.DataFrame, dict]:
+    """Convert raw Titanic columns into model-ready numeric and categorical features."""
     out = df.copy()
 
     out["Title"] = out["Name"].str.extract(r" ([A-Za-z]+)\\.", expand=False)
@@ -90,6 +94,7 @@ def preprocess_with_wcg(df: pd.DataFrame, group_survival: pd.Series, fit_stats: 
     out["NameLength"] = out["Name"].astype(str).str.len()
     out["TicketGroupSize"] = out.groupby("Ticket")["Ticket"].transform("count")
     out["FarePerPerson"] = out["Fare"] / out["FamilySize"].replace(0, 1)
+    # Keep the Kaggle-specific heuristic visible so it can be traced or disabled easily.
     out["GroupSurvival"] = group_survival.values
 
     if fit_stats is None:

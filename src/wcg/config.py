@@ -1,3 +1,5 @@
+"""Configuration helpers for the Titanic WCG experiments."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +9,7 @@ import yaml
 
 
 def load_config(config_path: str | Path) -> dict[str, Any]:
+    """Load and validate a YAML configuration file for the WCG pipeline."""
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")

@@ -1,3 +1,5 @@
+"""Model definitions and hyperparameter tuning for the Titanic WCG pipeline."""
+
 from __future__ import annotations
 
 import optuna
@@ -12,6 +14,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 def make_models(params: dict, seed: int) -> dict:
+    """Create the candidate model set used in the WCG experiments."""
     rf = RandomForestClassifier(random_state=seed, **params["rf"])
     et = ExtraTreesClassifier(random_state=seed, **params["et"])
     cb = CatBoostClassifier(random_seed=seed, verbose=False, **params["cb"])
@@ -39,9 +42,11 @@ def tune_tree_model(
     n_splits: int,
     seed: int,
 ) -> dict:
+    """Tune a tree-based model with Optuna and stratified cross-validation."""
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
     def objective(trial: optuna.Trial) -> float:
+        # Keep the search space compact so the result stays explainable and reproducible.
         if model_name == "rf":
             model = RandomForestClassifier(
                 random_state=seed,
