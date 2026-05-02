@@ -94,7 +94,8 @@ def tune_tree_model(
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
     def objective(trial: optuna.Trial) -> float:
-        # Keep the search space compact so the result stays explainable and reproducible.
+        # Делаем пространство поиска компактным, чтобы результат оставался
+        # понятным и воспроизводимым.
         if model_name == "rf":
             model = RandomForestClassifier(
                 random_state=seed,

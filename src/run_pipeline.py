@@ -22,12 +22,12 @@ COMMANDS = [
 
 
 def main() -> None:
-    """Run the full Titanic workflow from EDA to model training."""
+    """Запустить полный Titanic-пайплайн от EDA до обучения моделей."""
     for cmd in COMMANDS:
-        print("Running:", " ".join(cmd))
+        print("Запускаем:", " ".join(cmd))
         subprocess.run(cmd, cwd=ROOT, check=True)
 
-    print("\nPipeline finished. Check artifacts/ for reports and submissions.")
+    print("\nПайплайн завершён. Смотрите reports/ и submissions/ в artifacts/.")
 
 
 if __name__ == "__main__":

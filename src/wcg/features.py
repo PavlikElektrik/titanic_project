@@ -106,7 +106,7 @@ def preprocess_with_wcg(df: pd.DataFrame, group_survival: pd.Series, fit_stats: 
     out["NameLength"] = out["Name"].astype(str).str.len()
     out["TicketGroupSize"] = out.groupby("Ticket")["Ticket"].transform("count")
     out["FarePerPerson"] = out["Fare"] / out["FamilySize"].replace(0, 1)
-    # Keep the Kaggle-specific heuristic visible so it can be traced or disabled easily.
+    # Держим Kaggle-эвристику явно видимой, чтобы её было легко отследить или отключить.
     out["GroupSurvival"] = group_survival.values
 
     if fit_stats is None:
