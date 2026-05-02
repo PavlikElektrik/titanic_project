@@ -12,7 +12,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from torch_models import TorchBinaryClassifier
+from src.torch_models import TorchBinaryClassifier
 
 try:
     from xgboost import XGBClassifier

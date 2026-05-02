@@ -9,10 +9,10 @@ from pathlib import Path
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
-from wcg.config import load_config
-from wcg.features import build_group_survival_feature, preprocess_with_wcg
-from wcg.models import make_models, tune_tree_model
-from wcg.training import (
+from src.wcg.config import load_config
+from src.wcg.features import build_group_survival_feature, preprocess_with_wcg
+from src.wcg.models import make_models, tune_tree_model
+from src.wcg.training import (
     evaluate_cv,
     get_oof_predictions,
     save_submission,
@@ -42,10 +42,11 @@ def main() -> None:
     data_dir = Path(_resolve_cfg_value(args.data_dir, cfg["paths"]["data_dir"]))
     artifact_dir = Path(_resolve_cfg_value(args.artifact_dir, cfg["paths"]["artifact_dir"]))
 
-    report_dir = artifact_dir / "reports"
-    sub_dir = artifact_dir / "submissions"
-    report_dir.mkdir(parents=True, exist_ok=True)
-    sub_dir.mkdir(parents=True, exist_ok=True)
+    from src.common import make_artifact_dirs, load_train_test
+
+    dirs = make_artifact_dirs(artifact_dir)
+    report_dir = dirs["reports"]
+    sub_dir = dirs["submissions"]
 
     seed = int(cfg["experiment"]["seed"])
     cv_splits = int(_resolve_cfg_value(args.cv_splits, cfg["experiment"]["cv_splits"]))
@@ -55,8 +56,7 @@ def main() -> None:
     tune_blend = bool(cfg["training"]["tune_blend_weights"])
     tune_blend_trials = int(cfg["training"]["tune_blend_trials"])
 
-    train_df = pd.read_csv(data_dir / "train.csv")
-    test_df = pd.read_csv(data_dir / "test.csv")
+    train_df, test_df = load_train_test(data_dir)
     y_train = train_df["Survived"].astype(int)
 
     train_group, test_group = build_group_survival_feature(train_df, test_df)

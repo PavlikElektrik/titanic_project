@@ -21,7 +21,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from torch_models import TorchBinaryClassifier
+from src.torch_models import TorchBinaryClassifier
 
 try:
     from xgboost import XGBClassifier
@@ -428,14 +428,13 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     artifact_dir = Path(args.artifact_dir)
 
-    report_dir = artifact_dir / "reports"
-    submission_dir = artifact_dir / "submissions"
+    from src.common import make_artifact_dirs, load_train_test
 
-    report_dir.mkdir(parents=True, exist_ok=True)
-    submission_dir.mkdir(parents=True, exist_ok=True)
+    dirs = make_artifact_dirs(artifact_dir)
+    report_dir = dirs["reports"]
+    submission_dir = dirs["submissions"]
 
-    train_df = pd.read_csv(data_dir / "train.csv")
-    test_df = pd.read_csv(data_dir / "test.csv")
+    train_df, test_df = load_train_test(data_dir)
 
     y = train_df["Survived"].astype(int)
 
