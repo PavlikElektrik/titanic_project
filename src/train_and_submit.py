@@ -21,6 +21,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from torch_models import TorchBinaryClassifier
+
+try:
+    from xgboost import XGBClassifier
+except Exception:  # pragma: no cover
+    XGBClassifier = None
+
 SEED = 42
 
 CAT_COLS = ["Sex", "Embarked", "Deck", "Title", "Pclass"]
@@ -264,6 +271,33 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
             n_iter_no_change=20,
             random_state=SEED,
         )
+    elif model_name == "xgb":
+        if XGBClassifier is None:
+            raise ValueError("xgboost is not available")
+        model = XGBClassifier(
+            random_state=SEED,
+            eval_metric="logloss",
+            tree_method="hist",
+            n_estimators=700,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.85,
+            colsample_bytree=0.85,
+            reg_lambda=1.0,
+            n_jobs=-1,
+        )
+    elif model_name == "torch":
+        model = TorchBinaryClassifier(
+            hidden_layers=(64, 32),
+            dropout=0.15,
+            learning_rate=0.001,
+            weight_decay=1e-4,
+            batch_size=32,
+            max_epochs=80,
+            patience=10,
+            val_fraction=0.2,
+            random_state=SEED,
+        )
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -285,6 +319,8 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         "et": {"acc": [], "auc": []},
         "hgb": {"acc": [], "auc": []},
         "mlp": {"acc": [], "auc": []},
+        "xgb": {"acc": [], "auc": []},
+        "torch": {"acc": [], "auc": []},
         "logreg": {"acc": [], "auc": []},
     }
 
@@ -323,7 +359,7 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         scores["catboost"]["acc"].append(accuracy_score(y_valid, cat_pred))
         scores["catboost"]["auc"].append(roc_auc_score(y_valid, cat_proba))
 
-        for model_name in ["rf", "et", "hgb", "mlp", "logreg"]:
+        for model_name in ["rf", "et", "hgb", "mlp", "xgb", "torch", "logreg"]:
             model = build_sklearn_pipeline(model_name)
             model.fit(x_train, y_train)
             proba = model.predict_proba(x_valid)[:, 1]
@@ -386,7 +422,7 @@ def main() -> None:
     parser.add_argument("--data-dir", type=str, default="data")
     parser.add_argument("--artifact-dir", type=str, default="artifacts")
     parser.add_argument("--n-splits", type=int, default=5)
-    parser.add_argument("--force-model", type=str, default="", choices=["", "catboost", "rf", "et", "hgb", "mlp", "logreg"])
+    parser.add_argument("--force-model", type=str, default="", choices=["", "catboost", "rf", "et", "hgb", "mlp", "xgb", "torch", "logreg"])
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)

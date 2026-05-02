@@ -57,7 +57,7 @@
 | Тип задачи | Бинарная классификация |
 | Метрика | Accuracy (доля правильных ответов) |
 | Бейзлайн | Logistic Regression, Random Forest, ExtraTrees, CatBoost |
-| Доп. кандидаты | HistGradientBoosting, MLPClassifier |
+| Доп. кандидаты | XGBoost, HistGradientBoosting, Torch MLP |
 | Расширенный режим | WCG (`GroupSurvival`) как отдельная Kaggle-эвристика |
 
 ## 4. Titanic: метрики
@@ -131,7 +131,7 @@ python src/train_kaggle_wcg.py --config configs/wcg/high_score.yaml
 
 Что делает команда:
 - подбирает гиперпараметры для RF, ExtraTrees и CatBoost через Optuna
-- строит несколько сабмитов: rf, et, cb
+- строит несколько сабмитов: rf, et, cb, xgb, torch
 - строит три бленда: равный, fixed weights из конфига, Optuna-weighted
 
 Можно переопределить поля из конфига через CLI:

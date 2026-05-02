@@ -106,6 +106,10 @@ def main() -> None:
         submission_paths["et"] = str(save_submission(test_proba["et_wcg"], test_df["PassengerId"], sub_dir, "wcg_et"))
     if generate.get("cb", False):
         submission_paths["cb"] = str(save_submission(test_proba["cb_wcg"], test_df["PassengerId"], sub_dir, "wcg_cb"))
+    if generate.get("xgb", False) and "xgb_wcg" in test_proba:
+        submission_paths["xgb"] = str(save_submission(test_proba["xgb_wcg"], test_df["PassengerId"], sub_dir, "wcg_xgb"))
+    if generate.get("torch", False) and "torch_wcg" in test_proba:
+        submission_paths["torch"] = str(save_submission(test_proba["torch_wcg"], test_df["PassengerId"], sub_dir, "wcg_torch"))
 
     if generate.get("blend_equal", False):
         equal_weights = {"rf_wcg": 1.0 / 3.0, "et_wcg": 1.0 / 3.0, "cb_wcg": 1.0 / 3.0}

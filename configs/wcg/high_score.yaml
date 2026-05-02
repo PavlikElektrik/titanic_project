@@ -30,6 +30,22 @@ models:
     depth: 4
     l2_leaf_reg: 6.63
     loss_function: Logloss
+  xgb:
+    n_estimators: 1200
+    max_depth: 5
+    learning_rate: 0.035
+    subsample: 0.9
+    colsample_bytree: 0.9
+    reg_lambda: 1.5
+  torch:
+    hidden_layers: [96, 48]
+    dropout: 0.1
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    batch_size: 32
+    max_epochs: 100
+    patience: 12
+    val_fraction: 0.2
 
 blend:
   fixed_weights:
@@ -42,6 +58,8 @@ outputs:
     rf: true
     et: true
     cb: true
+    xgb: true
+    torch: true
     blend_equal: true
     blend_fixed: true
     blend_optuna: true
