@@ -25,11 +25,13 @@
 - src/run_eda.py - EDA-скрипт
 - src/train_and_submit.py - честное обучение, CV (без target leakage), сабмит
 - src/train_kaggle_wcg.py - конфигурируемый WCG entrypoint
+- src/main.py - короткий алиас для запуска основного пайплайна
 - src/wcg/config.py - загрузка YAML-конфигов
 - src/wcg/features.py - построение WCG-фичей
 - src/wcg/models.py - реестр и тюнинг моделей
 - src/wcg/training.py - CV, OOF-бленды, генерация submission
 - src/run_pipeline.py - единый запуск всего пайплайна
+- notebooks/eda.ipynb - отдельный notebook с EDA и визуализациями
 - artifacts/ - результаты (создается автоматически)
 
 ## Как читать проект
@@ -55,6 +57,7 @@
 | Тип задачи | Бинарная классификация |
 | Метрика | Accuracy (доля правильных ответов) |
 | Бейзлайн | Logistic Regression, Random Forest, ExtraTrees, CatBoost |
+| Доп. кандидаты | HistGradientBoosting, MLPClassifier |
 | Расширенный режим | WCG (`GroupSurvival`) как отдельная Kaggle-эвристика |
 
 ## 4. Titanic: метрики

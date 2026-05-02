@@ -12,12 +12,13 @@ import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 SEED = 42
@@ -208,7 +209,7 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
     categorical_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
     )
 
@@ -244,6 +245,25 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
             min_samples_leaf=2,
             random_state=SEED,
         )
+    elif model_name == "hgb":
+        model = HistGradientBoostingClassifier(
+            learning_rate=0.05,
+            max_depth=6,
+            max_iter=300,
+            min_samples_leaf=20,
+            random_state=SEED,
+        )
+    elif model_name == "mlp":
+        model = MLPClassifier(
+            hidden_layer_sizes=(64, 32),
+            activation="relu",
+            alpha=0.0005,
+            learning_rate_init=0.001,
+            max_iter=500,
+            early_stopping=True,
+            n_iter_no_change=20,
+            random_state=SEED,
+        )
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -263,6 +283,8 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         "catboost": {"acc": [], "auc": []},
         "rf": {"acc": [], "auc": []},
         "et": {"acc": [], "auc": []},
+        "hgb": {"acc": [], "auc": []},
+        "mlp": {"acc": [], "auc": []},
         "logreg": {"acc": [], "auc": []},
     }
 
@@ -301,7 +323,7 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         scores["catboost"]["acc"].append(accuracy_score(y_valid, cat_pred))
         scores["catboost"]["auc"].append(roc_auc_score(y_valid, cat_proba))
 
-        for model_name in ["rf", "et", "logreg"]:
+        for model_name in ["rf", "et", "hgb", "mlp", "logreg"]:
             model = build_sklearn_pipeline(model_name)
             model.fit(x_train, y_train)
             proba = model.predict_proba(x_valid)[:, 1]
@@ -364,7 +386,7 @@ def main() -> None:
     parser.add_argument("--data-dir", type=str, default="data")
     parser.add_argument("--artifact-dir", type=str, default="artifacts")
     parser.add_argument("--n-splits", type=int, default=5)
-    parser.add_argument("--force-model", type=str, default="", choices=["", "catboost", "rf", "et", "logreg"])
+    parser.add_argument("--force-model", type=str, default="", choices=["", "catboost", "rf", "et", "hgb", "mlp", "logreg"])
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
