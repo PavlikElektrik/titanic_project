@@ -78,7 +78,7 @@ def preprocess_with_wcg(df: pd.DataFrame, group_survival: pd.Series, fit_stats: 
     """
     out = df.copy()
 
-    out["Title"] = out["Name"].str.extract(r" ([A-Za-z]+)\\.", expand=False)
+    out["Title"] = out["Name"].str.extract(r" ([A-Za-z]+)\.", expand=False)
     title_map = {
         "Lady": "Rare",
         "Countess": "Rare",

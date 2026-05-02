@@ -57,7 +57,7 @@ def extract_title(name: str) -> str:
 
     Возвращает нормализованные значения, упрощающие обработку разных форм титулов.
     """
-    title = pd.Series(name).str.extract(r" ([A-Za-z]+)\\.", expand=False).iloc[0]
+    title = pd.Series(name).str.extract(r" ([A-Za-z]+)\.", expand=False).iloc[0]
     if pd.isna(title):
         return "Unknown"
 

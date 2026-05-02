@@ -75,14 +75,16 @@
 
 | Модель | CV Accuracy, mean | CV Accuracy, std |
 |---|---:|---:|
-| cb_wcg | 0.856318 | 0.017058 |
-| et_wcg | 0.848490 | 0.016610 |
-| rf_wcg | 0.848465 | 0.020842 |
-| logreg_wcg | 0.833902 | 0.016036 |
+| cb_wcg | 0.855207 | 0.012127 |
+| et_wcg | 0.852960 | 0.018701 |
+| torch_wcg | 0.847354 | 0.009784 |
+| rf_wcg | 0.845113 | 0.018700 |
+| logreg_wcg | 0.837273 | 0.018689 |
+| xgb_wcg | 0.832754 | 0.013684 |
 
 | Дополнительно | Значение |
 |---|---:|
-| Train sanity accuracy (WCG) | 0.883277 |
+| Train sanity accuracy (WCG) | 0.900112 |
 
 ## Установка
 
@@ -95,12 +97,12 @@ pip install -r requirements.txt
 ### 1) EDA
 
 ```bash
-python src/run_eda.py --data-dir data --artifact-dir artifacts
+python -m src.run_eda --data-dir data --artifact-dir artifacts
 ```
 
 ### 2) Обучение и submission
 
-Основная команда для запуска пайплайна теперь использует `src/main.py` и конфиг YAML:
+Основная команда для запуска пайплайна теперь использует `src/main.py` и конфиг YAML. По умолчанию это WCG-режим:
 
 ```bash
 python src/main.py --config configs/wcg/default.yaml
@@ -109,7 +111,7 @@ python src/main.py --config configs/wcg/default.yaml
 ### 2.1) Kaggle WCG режим через конфиг
 
 ```bash
-python src/main.py --config configs/wcg/default.yaml --mode wcg
+python src/main.py --config configs/wcg/high_score.yaml --mode wcg
 ```
 
 ## Что такое WCG и почему это важно
@@ -128,7 +130,7 @@ python src/main.py --config configs/wcg/default.yaml --mode wcg
 ### 2.2) WCG + Optuna + набор кандидатных сабмитов
 
 ```bash
-python src/train_kaggle_wcg.py --config configs/wcg/high_score.yaml
+python src/main.py --config configs/wcg/high_score.yaml --mode wcg
 ```
 
 Что делает команда:
@@ -139,7 +141,7 @@ python src/train_kaggle_wcg.py --config configs/wcg/high_score.yaml
 Можно переопределить поля из конфига через CLI:
 
 ```bash
-python src/train_kaggle_wcg.py --config configs/wcg/default.yaml --cv-splits 6 --tune --n-trials 40
+python src/main.py --config configs/wcg/default.yaml --mode wcg --cv-splits 6 --tune --n-trials 40
 ```
 
 ### 3) Все сразу
