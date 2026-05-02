@@ -1,4 +1,7 @@
-"""Titanic feature engineering, preprocessing, and baseline model utilities."""
+"""Функции для извлечения признаков, препроцессинга и базовых моделей для Titanic.
+
+Модуль содержит набор преобразований признаков и сборку пайплайнов для разных моделей.
+"""
 
 from __future__ import annotations
 
@@ -50,7 +53,10 @@ FEATURE_COLS = CAT_COLS + NUM_COLS
 
 
 def extract_title(name: str) -> str:
-    """Extract a normalized passenger title from the name field."""
+    """Извлечь нормализованный титул пассажира из поля `Name`.
+
+    Возвращает нормализованные значения, упрощающие обработку разных форм титулов.
+    """
     title = pd.Series(name).str.extract(r" ([A-Za-z]+)\\.", expand=False).iloc[0]
     if pd.isna(title):
         return "Unknown"
@@ -78,19 +84,19 @@ def extract_title(name: str) -> str:
 
 
 def extract_surname(name: str) -> str:
-    """Extract a lower-cased surname to support group-based features."""
+    """Извлечь фамилию (нижний регистр) для признаков, основанных на группах."""
     surname = pd.Series(name).str.extract(r"^([^,]+),", expand=False).iloc[0]
     return surname.strip().lower() if isinstance(surname, str) else "unknown"
 
 
 def get_ticket_group_sizes(train_df: pd.DataFrame, test_df: pd.DataFrame) -> pd.Series:
-    """Count how common each ticket is across train and test."""
+    """Посчитать количество одинаковых билетов в объединённом наборе train+test."""
     all_tickets = pd.concat([train_df["Ticket"], test_df["Ticket"]], axis=0)
     return all_tickets.value_counts(dropna=False)
 
 
 def _fit_imputation_stats(train_part: pd.DataFrame) -> Dict[str, object]:
-    """Collect robust training-only statistics used to fill missing values."""
+    """Собрать устойчивые статистики только по обучающей части для заполнения пропусков."""
     tmp = train_part.copy()
     tmp["Title"] = tmp["Name"].apply(extract_title)
 
@@ -117,7 +123,10 @@ def _apply_base_features(
     ticket_group_sizes: pd.Series,
     stats: Dict[str, object],
 ) -> pd.DataFrame:
-    """Build the core Titanic features from raw columns and train-only statistics."""
+    """Построить базовые признаки Titanic используя сырые столбцы и статистики из train.
+
+    Включает заполнение возраста и тарифа по группам, создание FamilySize и др.
+    """
     out = df.copy()
 
     out["Title"] = out["Name"].apply(extract_title)
@@ -159,7 +168,7 @@ def _apply_base_features(
 
 
 def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: float = 3.0) -> Dict[str, object]:
-    """Estimate smoothed survival priors for surname and ticket groups."""
+    """Оценить сглаженные приоры выживаемости для групп по фамилии и билету."""
     tmp = train_part[["Surname", "Ticket"]].copy()
     tmp["Survived"] = y_train_part.values
     global_rate = float(y_train_part.mean())
@@ -178,7 +187,7 @@ def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: f
 
 
 def apply_group_priors(df: pd.DataFrame, priors: Dict[str, object]) -> pd.DataFrame:
-    """Attach the group survival priors to a feature frame."""
+    """Прикрепить рассчитанные приоры выживаемости к набору признаков."""
     out = df.copy()
     global_rate = float(priors["global_rate"])
 
@@ -200,7 +209,10 @@ def make_features(
     y_fit: pd.Series,
     ticket_group_sizes: pd.Series,
 ) -> pd.DataFrame:
-    """Create model-ready Titanic features using train-fit statistics only."""
+    """Создать готовые к модели признаки, вычисляя все статистики только по train.
+
+    Это важно, чтобы не допустить утечку данных из валидации/теста.
+    """
     stats = _fit_imputation_stats(fit_df)
     fit_base = _apply_base_features(fit_df, ticket_group_sizes, stats)
     transform_base = _apply_base_features(transform_df, ticket_group_sizes, stats)
@@ -212,7 +224,10 @@ def make_features(
 
 
 def build_sklearn_pipeline(model_name: str) -> Pipeline:
-    """Construct the preprocessing + estimator pipeline for a named model."""
+    """Построить sklearn-пайплайн (препроцессор + модель) по имени модели.
+
+    Поддерживаются: logreg, rf, et, hgb, mlp, xgb, torch.
+    """
     categorical_pipe = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -310,7 +325,10 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
 
 
 def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd.Series, n_splits: int) -> pd.DataFrame:
-    """Evaluate all baseline models with stratified CV and report accuracy/AUC."""
+    """Оценить базовые модели через стратифицированный CV и вернуть таблицу с метриками.
+
+    Возвращает среднюю точность и AUC по фолдам для каждого кандидата.
+    """
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=SEED)
 
     scores = {
@@ -392,6 +410,10 @@ def fit_final_model(
     y: pd.Series,
     ticket_group_sizes: pd.Series,
 ):
+    """Обучить выбранную модель на всём train и получить предсказания для test.
+
+    Возвращает кортеж `(model, test_pred)` где `test_pred` — бинарные метки.
+    """
     x_train = make_features(train_df, train_df, y, ticket_group_sizes)
     x_test = make_features(train_df, test_df, y, ticket_group_sizes)
 

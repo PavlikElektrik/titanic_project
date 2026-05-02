@@ -1,4 +1,7 @@
-"""Model definitions and hyperparameter tuning for the Titanic WCG pipeline."""
+"""Определения моделей и поиск гиперпараметров для WCG-пайплайна Titanic.
+
+Содержит конструктор набора моделей и утилиту для тюнинга деревьев через Optuna.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ except Exception:  # pragma: no cover
 
 
 def make_models(params: dict, seed: int) -> dict:
-    """Create the candidate model set used in the WCG experiments."""
+    """Создать набор кандидатных моделей, используемых в WCG-экспериментах."""
     rf = RandomForestClassifier(random_state=seed, **params["rf"])
     et = ExtraTreesClassifier(random_state=seed, **params["et"])
     cb = CatBoostClassifier(random_seed=seed, verbose=False, **params["cb"])
@@ -84,7 +87,10 @@ def tune_tree_model(
     n_splits: int,
     seed: int,
 ) -> dict:
-    """Tune a tree-based model with Optuna and stratified cross-validation."""
+    """Настроить параметрическое пространство для древовидных моделей через Optuna.
+
+    Возвращает лучшие параметры в виде словаря.
+    """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
     def objective(trial: optuna.Trial) -> float:

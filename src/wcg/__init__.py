@@ -1,1 +1,1 @@
-# WCG pipeline package for Titanic experiments.
+# Пакет WCG для экспериментов с Titanic.

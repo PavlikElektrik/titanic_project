@@ -19,7 +19,7 @@
 
 ## Структура
 
-- data/ - исходные файлы train.csv и test.csv
+- data/ - исходные файлы `train.csv` и `test.csv` (файлы не включены в репозиторий — скачайте их с Kaggle и поместите в `data/`)
 - configs/wcg/default.yaml - базовый конфиг WCG
 - configs/wcg/high_score.yaml - конфиг для агрессивного тюнинга
 - src/run_eda.py - EDA-скрипт
@@ -100,14 +100,16 @@ python src/run_eda.py --data-dir data --artifact-dir artifacts
 
 ### 2) Обучение и submission
 
+Основная команда для запуска пайплайна теперь использует `src/main.py` и конфиг YAML:
+
 ```bash
-python src/train_and_submit.py --data-dir data --artifact-dir artifacts --n-splits 5
+python src/main.py --config configs/wcg/default.yaml
 ```
 
 ### 2.1) Kaggle WCG режим через конфиг
 
 ```bash
-python src/train_kaggle_wcg.py --config configs/wcg/default.yaml
+python src/main.py --config configs/wcg/default.yaml --mode wcg
 ```
 
 ## Что такое WCG и почему это важно
@@ -143,7 +145,7 @@ python src/train_kaggle_wcg.py --config configs/wcg/default.yaml --cv-splits 6 -
 ### 3) Все сразу
 
 ```bash
-python src/run_pipeline.py
+python src/main.py --config configs/wcg/default.yaml --run-all
 ```
 
 ## Что внутри фичей
@@ -180,5 +182,5 @@ python src/run_pipeline.py
 После изменений запускай:
 
 ```bash
-python src/train_kaggle_wcg.py --config configs/wcg/default.yaml
+python src/main.py --config configs/wcg/default.yaml --mode wcg
 ```

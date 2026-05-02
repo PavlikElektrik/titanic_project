@@ -1,4 +1,7 @@
-"""Training utilities for the Titanic WCG pipeline."""
+"""Утилиты обучения для WCG-пайплайна Titanic.
+
+Содержит функции для CV-оценки, получения OOF-прогнозов, тюнинга весов blend и сохранения сабмишенов.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 
 def evaluate_cv(X: pd.DataFrame, y: pd.Series, models: dict, n_splits: int, seed: int) -> pd.DataFrame:
-    """Compute accuracy-based CV results for all candidate models."""
+    """Вычислить CV-результаты (accuracy) для всех кандидатных моделей."""
     rows = []
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
 
@@ -32,7 +35,10 @@ def evaluate_cv(X: pd.DataFrame, y: pd.Series, models: dict, n_splits: int, seed
 
 
 def get_oof_predictions(X: pd.DataFrame, y: pd.Series, models: dict, n_splits: int, seed: int) -> tuple[np.ndarray, list[str]]:
-    """Return out-of-fold predicted probabilities for the model set."""
+    """Вернуть OOF-вероятности (out-of-fold) для набора моделей.
+
+    Рядки соответствуют объектам, столбцы — моделям в порядке `model_names`.
+    """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
     model_names = list(models.keys())
     oof = np.zeros((len(X), len(model_names)), dtype=float)
@@ -50,7 +56,10 @@ def get_oof_predictions(X: pd.DataFrame, y: pd.Series, models: dict, n_splits: i
 
 
 def tune_blend_weights(oof_pred: np.ndarray, y: pd.Series, n_trials: int) -> list[float]:
-    """Find blend weights that maximize OOF accuracy for the probability ensemble."""
+    """Подобрать веса для ансамбля вероятностей, максимизирующие OOF-accuracy.
+
+    Используется Optuna для поиска нормированных весов.
+    """
     y_arr = y.values
 
     def objective(trial: optuna.Trial) -> float:
@@ -71,7 +80,10 @@ def tune_blend_weights(oof_pred: np.ndarray, y: pd.Series, n_trials: int) -> lis
 
 
 def weighted_proba(proba_map: dict[str, np.ndarray], weights_map: dict[str, float]) -> np.ndarray:
-    """Combine per-model probabilities with explicit weights."""
+    """Объединить вероятности разных моделей с заданными весами.
+
+    Ожидается, что `weights_map` покрывает ключи из `proba_map`.
+    """
     arr = None
     for model_name, weight in weights_map.items():
         part = proba_map[model_name] * float(weight)
@@ -80,7 +92,10 @@ def weighted_proba(proba_map: dict[str, np.ndarray], weights_map: dict[str, floa
 
 
 def save_submission(proba: np.ndarray, passenger_id: pd.Series, out_dir: Path, suffix: str) -> Path:
-    """Convert probabilities into a Kaggle submission CSV."""
+    """Преобразовать вероятности в CSV-формат сабмишена Kaggle и сохранить файл.
+
+    Возвращает путь к сохранённому файлу.
+    """
     pred = (proba >= 0.5).astype(int)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     sub_path = out_dir / f"submission_{suffix}_{ts}.csv"

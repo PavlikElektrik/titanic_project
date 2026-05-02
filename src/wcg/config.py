@@ -1,4 +1,4 @@
-"""Configuration helpers for the Titanic WCG experiments."""
+"""Хелперы для загрузки и валидации конфигураций WCG-экспериментов (YAML)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ import yaml
 
 
 def load_config(config_path: str | Path) -> dict[str, Any]:
-    """Load and validate a YAML configuration file for the WCG pipeline."""
+    """Загрузить и проверить YAML-конфигурацию для WCG-пайплайна.
+
+    Бросает `FileNotFoundError`, если файл не найден, и `ValueError`, если содержимое не словарь.
+    """
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")

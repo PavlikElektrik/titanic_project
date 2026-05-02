@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-"""Convenience launcher that runs the Titanic EDA and training scripts in order."""
+"""Утилитарный лаунчер для поочерёдного запуска EDA и обучения моделей.
+
+Вызывает последовательность скриптов, чтобы быстро прогнать полный пайплайн.
+"""
 
 import subprocess
 import sys

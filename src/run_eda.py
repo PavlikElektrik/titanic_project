@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+"""Простой модуль EDA: строит графики и собирает текстовый отчёт по данным Titanic.
+
+Функции сохраняют набор png-файлов и markdown-отчёт для быстрого обзора данных.
+"""
+
 import argparse
 from pathlib import Path
 
@@ -11,7 +16,11 @@ sns.set_theme(style="whitegrid")
 
 
 def extract_title(name: str) -> str:
-    title = pd.Series(name).str.extract(r" ([A-Za-z]+)\\.", expand=False).iloc[0]
+    """Извлечь нормализованный титул пассажира из поля `Name`.
+
+    Возвращает общие варианты (`Miss`, `Mrs`, `Rare`, `Unknown`) для удобства анализа.
+    """
+    title = pd.Series(name).str.extract(r" ([A-Za-z]+)\.", expand=False).iloc[0]
     if pd.isna(title):
         return "Unknown"
     rare = {
@@ -37,6 +46,10 @@ def extract_title(name: str) -> str:
 
 
 def save_missing_plot(df: pd.DataFrame, out_path: Path) -> None:
+    """Сохранить гистограмму доли пропусков по столбцам в `out_path`.
+
+    Если пропусков нет — записать картинку с текстом "No missing values".
+    """
     missing = df.isna().mean().sort_values(ascending=False)
     missing = missing[missing > 0]
 
@@ -55,6 +68,10 @@ def save_missing_plot(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def save_survival_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
+    """Сгенерировать и сохранить несколько графиков выживаемости.
+
+    Создаются графики по `Sex`, `Pclass` и `Title`.
+    """
     train_plot = train_df.copy()
     train_plot["Title"] = train_plot["Name"].apply(extract_title)
 
@@ -103,6 +120,8 @@ def save_survival_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
 
 
 def save_distribution_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
+    """Сохранить распределения `Age` и `Fare` в виде png.
+    """
     plt.figure(figsize=(7, 4))
     sns.histplot(train_df["Age"], bins=30, kde=True, color="#457b9d")
     plt.title("Age Distribution")
@@ -119,6 +138,8 @@ def save_distribution_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
 
 
 def save_corr_plot(train_df: pd.DataFrame, plot_dir: Path) -> None:
+    """Построить и сохранить тепловую карту корреляций для числовых столбцов.
+    """
     numeric_cols = [
         "Survived",
         "Pclass",
@@ -138,6 +159,8 @@ def save_corr_plot(train_df: pd.DataFrame, plot_dir: Path) -> None:
 
 
 def build_report(train_df: pd.DataFrame, test_df: pd.DataFrame, out_path: Path) -> None:
+    """Собрать простой markdown-отчёт по данным и сохранить в `out_path`.
+    """
     missing_df = train_df.isna().sum().to_frame("missing_count")
     missing_df["missing_ratio"] = (missing_df["missing_count"] / len(train_df)).round(4)
 
@@ -184,7 +207,7 @@ def build_report(train_df: pd.DataFrame, test_df: pd.DataFrame, out_path: Path) 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Titanic EDA and save report/plots.")
+    parser = argparse.ArgumentParser(description="Запустить EDA и сохранить отчёт/графики.")
     parser.add_argument("--data-dir", type=str, default="data")
     parser.add_argument("--artifact-dir", type=str, default="artifacts")
     args = parser.parse_args()

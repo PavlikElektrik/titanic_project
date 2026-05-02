@@ -7,6 +7,11 @@ from sklearn.model_selection import train_test_split
 
 
 def _build_mlp(input_dim: int, hidden_layers: tuple[int, ...], dropout: float, output_dim: int) -> torch.nn.Module:
+    """Построить простой MLP как последовательность слоёв PyTorch.
+
+    Параметры: входная размерность, кортеж скрытых слоёв, dropout, выходная размерность.
+    Возвращает `torch.nn.Sequential`.
+    """
     layers: list[torch.nn.Module] = []
     prev_dim = input_dim
     for hidden_dim in hidden_layers:
@@ -42,7 +47,16 @@ class TorchBinaryClassifier(BaseEstimator, ClassifierMixin):
         self.val_fraction = val_fraction
         self.random_state = random_state
 
+    """Скользящий обёртка-оценщик для бинарной классификации на PyTorch MLP.
+
+    Используется как sklearn-совместимый классификатор со `fit`, `predict_proba` и `predict`.
+    """
+
     def fit(self, X, y):
+        """Обучить модель на данных `X`, `y`.
+
+        Реализовано простое обучение с ранней остановкой по валидационной части.
+        """
         X_arr = np.asarray(X, dtype=np.float32)
         y_arr = np.asarray(y, dtype=np.float32)
         x_tr, x_va, y_tr, y_va = train_test_split(
@@ -99,6 +113,7 @@ class TorchBinaryClassifier(BaseEstimator, ClassifierMixin):
         return self
 
     def predict_proba(self, X):
+        """Вернуть вероятности классов в формате [[p0, p1], ...]."""
         X_arr = np.asarray(X, dtype=np.float32)
         self.model_.eval()
         with torch.no_grad():
@@ -107,6 +122,7 @@ class TorchBinaryClassifier(BaseEstimator, ClassifierMixin):
         return np.column_stack([1.0 - proba, proba])
 
     def predict(self, X):
+        """Вернуть предсказанные метки 0/1 по порогу 0.5."""
         return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
 
 
@@ -133,7 +149,13 @@ class TorchRegressor(BaseEstimator, RegressorMixin):
         self.val_fraction = val_fraction
         self.random_state = random_state
 
+    """Sklearn-обёртка для регрессии на PyTorch MLP.
+
+    Поведение схоже с `TorchBinaryClassifier`, но использует MSELoss и возвращает числовые предсказания.
+    """
+
     def fit(self, X, y):
+        """Обучить регрессионную модель на данных `X`, `y`."""
         X_arr = np.asarray(X, dtype=np.float32)
         y_arr = np.asarray(y, dtype=np.float32)
         x_tr, x_va, y_tr, y_va = train_test_split(
@@ -188,6 +210,7 @@ class TorchRegressor(BaseEstimator, RegressorMixin):
         return self
 
     def predict(self, X):
+        """Вернуть вещественные предсказания модели."""
         X_arr = np.asarray(X, dtype=np.float32)
         self.model_.eval()
         with torch.no_grad():

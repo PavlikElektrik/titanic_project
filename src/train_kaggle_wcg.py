@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-"""Titanic training entry point that enables the WCG baseline and blending."""
+"""Точка входа для обучения WCG-эксперимента и формирования blend- сабмишенов.
+
+Скрипт поддерживает загрузку конфигурации из YAML, настройку параметров и
+сохранение отчётов и сабмишенов.
+"""
 
 import argparse
 import json
@@ -22,12 +26,12 @@ from src.wcg.training import (
 
 
 def _resolve_cfg_value(cli_value, cfg_value):
-    """Prefer CLI overrides when present, otherwise fall back to the YAML config."""
+    """Вернуть значение из CLI, если оно задано, иначе — из конфигурации YAML."""
     return cli_value if cli_value is not None else cfg_value
 
 
 def main() -> None:
-    """Run the WCG experiment end to end and save reports plus submissions."""
+    """Запустить WCG-эксперимент полностью: CV, обучение моделей и сабмишены."""
     parser = argparse.ArgumentParser(description="Titanic WCG training with external config files.")
     parser.add_argument("--config", type=str, default="configs/wcg/default.yaml")
     parser.add_argument("--data-dir", type=str, default=None)

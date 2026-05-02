@@ -1,4 +1,8 @@
-"""Feature engineering for Titanic, including the optional WCG group signal."""
+"""Извлечение признаков для Titanic, включая WCG-групповый сигнал.
+
+Модуль собирает признаки, специфичные для соревнования (группы по фамилиям,
+размер билета и т.д.) и возвращает готовый набор признаков и служебные статистики.
+"""
 
 from __future__ import annotations
 
@@ -22,7 +26,11 @@ FEATURES = [
 
 
 def build_group_survival_feature(train_df: pd.DataFrame, test_df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    """Build a heuristic group-survival feature from family and ticket structure."""
+    """Построить эвристическую фичу групповой выживаемости по фамилии и билету.
+
+    Для каждой группы (фамилия+fare, затем ticket) проверяются известные метки
+    и проставляется 0.0, 1.0 или 0.5 (неизвестно).
+    """
     all_data = pd.concat([train_df.copy(), test_df.copy()], sort=False).reset_index(drop=True)
     all_data["Surname"] = all_data["Name"].str.extract(r"^([^,]+),", expand=False).fillna("Unknown")
     all_data["GroupSurvival"] = 0.5
@@ -63,7 +71,11 @@ def build_group_survival_feature(train_df: pd.DataFrame, test_df: pd.DataFrame) 
 
 
 def preprocess_with_wcg(df: pd.DataFrame, group_survival: pd.Series, fit_stats: dict | None = None) -> tuple[pd.DataFrame, dict]:
-    """Convert raw Titanic columns into model-ready numeric and categorical features."""
+    """Преобразовать сырые столбцы в числовые/категориальные признаки, применяя WCG-сигнал.
+
+    Если `fit_stats` не переданы, функция вычисляет статистики по текущему набору
+    (median для Age/Fare, уровни категорий) и возвращает их для повторного использования.
+    """
     out = df.copy()
 
     out["Title"] = out["Name"].str.extract(r" ([A-Za-z]+)\\.", expand=False)
