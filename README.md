@@ -57,6 +57,30 @@
 | Бейзлайн | Logistic Regression, Random Forest, ExtraTrees, CatBoost |
 | Расширенный режим | WCG (`GroupSurvival`) как отдельная Kaggle-эвристика |
 
+## 4. Titanic: метрики
+
+### Baseline CV
+
+| Модель | CV Accuracy, mean | CV Accuracy, std | CV AUC, mean | CV AUC, std |
+|---|---:|---:|---:|---:|
+| ExtraTrees | 0.783422 | 0.018221 | 0.837633 | 0.019326 |
+| LogisticRegression | 0.756487 | 0.019166 | 0.797665 | 0.030442 |
+| RandomForest | 0.745245 | 0.021298 | 0.827180 | 0.013118 |
+| CatBoost | 0.717199 | 0.019854 | 0.835016 | 0.019397 |
+
+### WCG CV
+
+| Модель | CV Accuracy, mean | CV Accuracy, std |
+|---|---:|---:|
+| cb_wcg | 0.856318 | 0.017058 |
+| et_wcg | 0.848490 | 0.016610 |
+| rf_wcg | 0.848465 | 0.020842 |
+| logreg_wcg | 0.833902 | 0.016036 |
+
+| Дополнительно | Значение |
+|---|---:|
+| Train sanity accuracy (WCG) | 0.883277 |
+
 ## Установка
 
 ```bash
