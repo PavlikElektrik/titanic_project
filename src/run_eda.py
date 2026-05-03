@@ -120,17 +120,16 @@ def save_survival_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
 
 
 def save_distribution_plots(train_df: pd.DataFrame, plot_dir: Path) -> None:
-    """Сохранить распределения `Age` и `Fare` в виде png.
-    """
+    """Сохранить распределения Age и Fare в виде png-файлов."""
     plt.figure(figsize=(7, 4))
-    sns.histplot(train_df["Age"], bins=30, kde=True, color="#457b9d")
+    sns.histplot(data=train_df, x="Age", bins=30, kde=True, color="#457b9d")
     plt.title("Age Distribution")
     plt.tight_layout()
     plt.savefig(plot_dir / "age_distribution.png", dpi=150)
     plt.close()
 
     plt.figure(figsize=(7, 4))
-    sns.histplot(train_df["Fare"], bins=40, kde=True, color="#f4a261")
+    sns.histplot(data=train_df, x="Fare", bins=40, kde=True, color="#f4a261")
     plt.title("Fare Distribution")
     plt.tight_layout()
     plt.savefig(plot_dir / "fare_distribution.png", dpi=150)

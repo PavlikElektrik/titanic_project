@@ -1,6 +1,15 @@
-"""Функции для извлечения признаков, препроцессинга и базовых моделей для Titanic.
+"""Feature engineering, препроцессинг и базовые модели для соревнования Titanic.
 
-Модуль содержит набор преобразований признаков и сборку пайплайнов для разных моделей.
+Модуль собирает все шаги обучения в одном месте:
+- извлечение признаков из сырых столбцов (Title, Surname, FamilySize и т.д.)
+- сглаженные групповые приоры выживаемости по фамилии и билету
+- сборка sklearn-пайплайнов для всех кандидатных моделей
+- честная стратифицированная CV с пересчётом признаков на каждом фолде
+- обучение финальной модели на всём train и генерация Kaggle-сабмишена
+
+Главное архитектурное решение: статистики для импутации и групповые приоры
+вычисляются ИСКЛЮЧИТЕЛЬНО на train-части каждого фолда. Это гарантирует, что
+CV-оценка не завышена утечкой таргета из валидации.
 """
 
 from __future__ import annotations
@@ -9,7 +18,6 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -26,6 +34,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from src.torch_models import TorchBinaryClassifier
 
+# XGBoost оборачиваем в try/except — модель опциональная, чтобы пайплайн
+# запускался и в окружении без неё (тогда xgb просто не попадёт в реестр).
 try:
     from xgboost import XGBClassifier
 except Exception:  # pragma: no cover
@@ -33,6 +43,9 @@ except Exception:  # pragma: no cover
 
 SEED = 42
 
+# Категориальные и числовые колонки, которые попадают в модель после
+# feature engineering. Порядок важен — он сохраняется в FEATURE_COLS,
+# который потом фиксирует схему DataFrame, передаваемого в модели.
 CAT_COLS = ["Sex", "Embarked", "Deck", "Title", "Pclass"]
 NUM_COLS = [
     "Age",
@@ -53,9 +66,16 @@ FEATURE_COLS = CAT_COLS + NUM_COLS
 
 
 def extract_title(name: str) -> str:
-    """Извлечь нормализованный титул пассажира из поля `Name`.
+    """Извлечь нормализованный титул пассажира из поля Name.
 
-    Возвращает нормализованные значения, упрощающие обработку разных форм титулов.
+    Имена в Titanic имеют формат "Фамилия, Титул. Имя", например
+    "Braund, Mr. Owen Harris". Регулярка ловит слово между пробелом и точкой —
+    это и есть титул (Mr, Miss, Master, Dr и т.д.).
+
+    Редкие титулы (Lady, Capt, Col, Don, ...) сворачиваются в "Rare", чтобы
+    у модели не было категорий с одним-двумя примерами. Локальные варианты
+    (Mlle → Miss, Mme → Mrs, Ms → Miss) приводятся к каноническим формам,
+    потому что это одно и то же по смыслу, просто на разных языках.
     """
     title = pd.Series(name).str.extract(r" ([A-Za-z]+)\.", expand=False).iloc[0]
     if pd.isna(title):
@@ -84,19 +104,42 @@ def extract_title(name: str) -> str:
 
 
 def extract_surname(name: str) -> str:
-    """Извлечь фамилию (нижний регистр) для признаков, основанных на группах."""
+    """Извлечь фамилию (в нижнем регистре) для группировки по семьям.
+
+    Формат имени "Фамилия, Титул. Имя" — берём всё до первой запятой.
+    Нижний регистр нужен, чтобы "Smith" и "smith" попали в одну группу.
+    """
     surname = pd.Series(name).str.extract(r"^([^,]+),", expand=False).iloc[0]
     return surname.strip().lower() if isinstance(surname, str) else "unknown"
 
 
 def get_ticket_group_sizes(train_df: pd.DataFrame, test_df: pd.DataFrame) -> pd.Series:
-    """Посчитать количество одинаковых билетов в объединённом наборе train+test."""
+    """Посчитать, сколько раз каждый билет встречается в объединённом train+test.
+
+    Размер группы по билету — слабая, но безопасная фича: это просто факт о
+    данных (сколько людей купили билет вместе), не зависящий от таргета,
+    поэтому считать его на полном датасете не утечка.
+    """
     all_tickets = pd.concat([train_df["Ticket"], test_df["Ticket"]], axis=0)
     return all_tickets.value_counts(dropna=False)
 
 
-def _fit_imputation_stats(train_part: pd.DataFrame) -> Dict[str, object]:
-    """Собрать устойчивые статистики только по обучающей части для заполнения пропусков."""
+def _fit_imputation_stats(train_part: pd.DataFrame) -> dict:
+    """Собрать статистики для заполнения пропусков ТОЛЬКО по train-части.
+
+    Возвращает словарь со статистиками, которые потом одинаково применяются
+    и к train, и к valid/test. Идея в том, чтобы валидация не "подсматривала"
+    собственные значения через медиану.
+
+    Что собираем:
+    - age_map: медиана Age по парам (Title, Pclass) — Age сильно зависит от
+      сочетания титула и класса (например, Master в 3 классе ≈ ребёнок),
+      поэтому такая импутация точнее, чем глобальная медиана.
+    - age_global: запасной вариант, если пары (Title, Pclass) нет в train.
+    - fare_pclass: медиана Fare по Pclass — цена билета сильно коррелирует
+      с классом каюты.
+    - fare_global / embarked_value: глобальные fallback'и.
+    """
     tmp = train_part.copy()
     tmp["Title"] = tmp["Name"].apply(extract_title)
 
@@ -121,11 +164,24 @@ def _fit_imputation_stats(train_part: pd.DataFrame) -> Dict[str, object]:
 def _apply_base_features(
     df: pd.DataFrame,
     ticket_group_sizes: pd.Series,
-    stats: Dict[str, object],
+    stats: dict,
 ) -> pd.DataFrame:
-    """Построить базовые признаки Titanic используя сырые столбцы и статистики из train.
+    """Построить базовые признаки Titanic из сырых столбцов.
 
-    Включает заполнение возраста и тарифа по группам, создание FamilySize и др.
+    Принимает на вход уже посчитанные `stats` (из `_fit_imputation_stats`),
+    чтобы train и valid/test обрабатывались одинаковыми правилами и не было
+    утечки. Сама функция чистая — никаких глобальных статистик не вычисляет.
+
+    Что добавляется:
+    - Title, Surname — извлечены из Name
+    - Deck — первая буква Cabin (часто это палуба, "U" для пропусков)
+    - HasCabin — есть ли вообще запись о каюте (часто скоррелировано с классом)
+    - FamilySize, IsAlone — размер семьи на борту и флаг одиночки
+    - NameLength — длина имени (на удивление неплохой прокси для социального
+      статуса: у богатых пассажиров имена обычно длиннее)
+    - TicketGroupSize — сколько людей разделили один билет (часто это группы
+      друзей или больших семей, не пойманные через SibSp/Parch)
+    - FarePerPerson — Fare поделить на размер группы
     """
     out = df.copy()
 
@@ -141,34 +197,71 @@ def _apply_base_features(
 
     out["TicketGroupSize"] = out["Ticket"].map(ticket_group_sizes).fillna(1).astype(int)
 
+    # Распаковываем stats в локальные переменные. Это и читается чище, и
+    # снимает претензии type-checker'а к индексации внутри вложенных функций.
+    age_map = stats["age_map"]
+    age_global = stats["age_global"]
+    fare_pclass = stats["fare_pclass"]
+    fare_global = stats["fare_global"]
+    embarked_value = stats["embarked_value"]
+
     def fill_age(row: pd.Series) -> float:
+        # Стратегия: медиана по (Title, Pclass) → глобальная медиана.
+        # Делаем построчно, потому что ключ зависит сразу от двух колонок.
         key = (row["Title"], row["Pclass"])
         if pd.notna(row["Age"]):
             return float(row["Age"])
-        if key in stats["age_map"] and pd.notna(stats["age_map"][key]):
-            return float(stats["age_map"][key])
-        return float(stats["age_global"])
+        if key in age_map and pd.notna(age_map[key]):
+            return float(age_map[key])
+        return float(age_global)
 
     out["Age"] = out.apply(fill_age, axis=1)
 
     def fill_fare(row: pd.Series) -> float:
+        # Та же логика: медиана по Pclass → глобальная медиана.
         if pd.notna(row["Fare"]):
             return float(row["Fare"])
-        if row["Pclass"] in stats["fare_pclass"] and pd.notna(stats["fare_pclass"][row["Pclass"]]):
-            return float(stats["fare_pclass"][row["Pclass"]])
-        return float(stats["fare_global"])
+        if row["Pclass"] in fare_pclass and pd.notna(fare_pclass[row["Pclass"]]):
+            return float(fare_pclass[row["Pclass"]])
+        return float(fare_global)
 
     out["Fare"] = out.apply(fill_fare, axis=1)
-    out["Embarked"] = out["Embarked"].fillna(stats["embarked_value"])
+    out["Embarked"] = out["Embarked"].fillna(embarked_value)
 
+    # FarePerPerson пересчитываем после импутации Fare и FamilySize,
+    # чтобы он отражал заполненные значения.
     out["FarePerPerson"] = out["Fare"] / out["FamilySize"].replace(0, 1)
+
+    # Pclass переводим в строку, чтобы он шёл через категориальный пайплайн
+    # (one-hot), а не через числовой scaler. С точки зрения смысла это
+    # категория из 3 уровней, а не упорядоченное число.
     out["Pclass"] = out["Pclass"].astype(str)
 
     return out
 
 
-def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: float = 3.0) -> Dict[str, object]:
-    """Оценить сглаженные приоры выживаемости для групп по фамилии и билету."""
+def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: float = 3.0) -> dict:
+    """Посчитать сглаженные приоры выживаемости по фамилии и билету.
+
+    Это сердцевина group-features: для каждой фамилии и каждого билета мы
+    знаем, какая доля её представителей в train выжила. Сырая доля очень
+    шумная для маленьких групп (если в группе 1 человек и он выжил, prior
+    будет 1.0 — почти гарантированная утечка через переобучение).
+
+    Поэтому используем сглаживание по формуле байесовского shrinkage:
+
+        prior = (sum + alpha * global_rate) / (count + alpha)
+
+    Это эквивалентно тому, что мы добавляем к каждой группе alpha "виртуальных"
+    наблюдений с глобальной долей выживших. Эффект:
+    - для большой группы (count >> alpha) prior ≈ настоящая доля выживших
+    - для маленькой (count ≤ alpha) prior смещается к глобальному среднему
+    - alpha = 3 — практичный компромисс: одиночные группы почти не вносят
+      сигнала, а группы из 5+ человек уже доверяем
+
+    ВАЖНО: считаем ТОЛЬКО на train-фолде. Если посчитать на полном train+valid,
+    получим target leakage — модель будет видеть метки валидации через приор.
+    """
     tmp = train_part[["Surname", "Ticket"]].copy()
     tmp["Survived"] = y_train_part.values
     global_rate = float(y_train_part.mean())
@@ -186,8 +279,18 @@ def fit_group_priors(train_part: pd.DataFrame, y_train_part: pd.Series, alpha: f
     }
 
 
-def apply_group_priors(df: pd.DataFrame, priors: Dict[str, object]) -> pd.DataFrame:
-    """Прикрепить рассчитанные приоры выживаемости к набору признаков."""
+def apply_group_priors(df: pd.DataFrame, priors: dict) -> pd.DataFrame:
+    """Прикрепить заранее посчитанные приоры к датафрейму с признаками.
+
+    Если фамилии или билета не было в train (например, новый пассажир в test),
+    map вернёт NaN — заполняем глобальной долей выживших, чтобы модель не
+    спотыкалась о пропуски и не получала "необычно низкую" оценку для
+    пассажиров из неизвестных групп.
+
+    GroupSurvivalPrior — простое усреднение двух приоров. Это эвристика:
+    билет и фамилия часто пересекаются (одна семья на одном билете), но
+    не всегда, поэтому средний сигнал стабильнее каждого по отдельности.
+    """
     out = df.copy()
     global_rate = float(priors["global_rate"])
 
@@ -209,14 +312,26 @@ def make_features(
     y_fit: pd.Series,
     ticket_group_sizes: pd.Series,
 ) -> pd.DataFrame:
-    """Создать готовые к модели признаки, вычисляя все статистики только по train.
+    """Собрать готовые к модели признаки, используя статистики только из fit_df.
 
-    Это важно, чтобы не допустить утечку данных из валидации/теста.
+    Это публичный API модуля для feature engineering. Разделение fit_df vs
+    transform_df — ключевое: на train-фолде статистики и приоры считаются
+    по fit_df (это train), а потом применяются к transform_df (это либо тот
+    же train, либо valid, либо test).
+
+    Типичные сценарии:
+    - На фолде CV: fit_df = train-фолд, transform_df = valid-фолд → статистики
+      по train, применение к valid. Никакой утечки.
+    - На финальном обучении: fit_df = весь train, transform_df = test →
+      статистики по всему train, применение к test.
+    - Чтобы получить признаки самого train-фолда: fit_df = transform_df = train.
     """
     stats = _fit_imputation_stats(fit_df)
     fit_base = _apply_base_features(fit_df, ticket_group_sizes, stats)
     transform_base = _apply_base_features(transform_df, ticket_group_sizes, stats)
 
+    # Приоры считаются на fit-части после извлечения базовых признаков
+    # (потому что нам нужны Surname и Ticket в нормализованном виде).
     priors = fit_group_priors(fit_base, y_fit)
     transform_full = apply_group_priors(transform_base, priors)
 
@@ -224,9 +339,18 @@ def make_features(
 
 
 def build_sklearn_pipeline(model_name: str) -> Pipeline:
-    """Построить sklearn-пайплайн (препроцессор + модель) по имени модели.
+    """Собрать sklearn-пайплайн (препроцессор + модель) по имени модели.
+
+    Все sklearn-совместимые модели обёрнуты в одинаковый ColumnTransformer,
+    чтобы препроцессинг был идентичен и сравнение моделей было честным:
+    - категориальные: most_frequent imputer + OneHotEncoder с handle_unknown="ignore"
+      (ignore нужен, чтобы новая категория в test не валила пайплайн)
+    - числовые: median imputer + StandardScaler (scaler нужен в первую очередь
+      для линейных моделей и MLP, деревьям он не мешает).
 
     Поддерживаются: logreg, rf, et, hgb, mlp, xgb, torch.
+    CatBoost обрабатывается отдельно в evaluate_models, потому что он умеет
+    сам переваривать категориальные колонки и не нуждается в OHE.
     """
     categorical_pipe = Pipeline(
         steps=[
@@ -325,12 +449,25 @@ def build_sklearn_pipeline(model_name: str) -> Pipeline:
 
 
 def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd.Series, n_splits: int) -> pd.DataFrame:
-    """Оценить базовые модели через стратифицированный CV и вернуть таблицу с метриками.
+    """Оценить все кандидатные модели через стратифицированную CV.
 
-    Возвращает среднюю точность и AUC по фолдам для каждого кандидата.
+    Ключевое отличие от наивной CV: на КАЖДОМ фолде мы заново вызываем
+    `make_features` отдельно для train- и valid-частей. Это гарантирует, что
+    статистики импутации и групповые приоры считаются только по train-фолду,
+    не подсматривая в valid. Без этого CV-метрика была бы завышена (и сильно).
+
+    CatBoost обучается отдельным блоком, потому что:
+    - умеет работать с категориальными колонками напрямую (через cat_features),
+      без OneHotEncoder, что обычно даёт лучше скор и быстрее
+    - использует eval_set с early stopping, поэтому ему нужен явный valid
+
+    Для остальных моделей единая логика: построить pipeline, fit, predict_proba,
+    посчитать accuracy и AUC.
     """
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=SEED)
 
+    # Заранее регистрируем все модели в словаре, чтобы сразу было видно,
+    # какие кандидаты сравниваются. Для каждой копим acc и auc по фолдам.
     scores = {
         "catboost": {"acc": [], "auc": []},
         "rf": {"acc": [], "auc": []},
@@ -348,9 +485,14 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         y_train = y.iloc[train_idx].copy()
         y_valid = y.iloc[valid_idx].copy()
 
+        # Признаки для train: fit_df = transform_df = x_train_raw.
+        # Признаки для valid: fit_df = x_train_raw, transform_df = x_valid_raw.
+        # Разные fit_df на разных фолдах — поэтому это не утечка.
         x_train = make_features(x_train_raw, x_train_raw, y_train, ticket_group_sizes)
         x_valid = make_features(x_train_raw, x_valid_raw, y_train, ticket_group_sizes)
 
+        # CatBoost получает другой seed на каждом фолде — это не критично
+        # для метрик, но даёт более независимые модели для возможного бленда.
         cat_model = CatBoostClassifier(
             iterations=2500,
             learning_rate=0.02,
@@ -377,6 +519,8 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
         scores["catboost"]["acc"].append(accuracy_score(y_valid, cat_pred))
         scores["catboost"]["auc"].append(roc_auc_score(y_valid, cat_proba))
 
+        # Остальные модели — единым циклом, потому что у них общий API
+        # после оборачивания в build_sklearn_pipeline.
         for model_name in ["rf", "et", "hgb", "mlp", "xgb", "torch", "logreg"]:
             model = build_sklearn_pipeline(model_name)
             model.fit(x_train, y_train)
@@ -385,6 +529,7 @@ def evaluate_models(train_df: pd.DataFrame, y: pd.Series, ticket_group_sizes: pd
             scores[model_name]["acc"].append(accuracy_score(y_valid, pred))
             scores[model_name]["auc"].append(roc_auc_score(y_valid, proba))
 
+    # Сворачиваем списки в среднее и std по фолдам — это итоговая таблица CV.
     rows = []
     for model_name, metric_values in scores.items():
         rows.append(
@@ -412,7 +557,14 @@ def fit_final_model(
 ):
     """Обучить выбранную модель на всём train и получить предсказания для test.
 
-    Возвращает кортеж `(model, test_pred)` где `test_pred` — бинарные метки.
+    На этом этапе делить данные уже не нужно — все 891 пример Titanic-train
+    идут в обучение, а статистики и приоры считаются на полном train.
+    Возвращает кортеж (модель, бинарные предсказания на test).
+
+    Для CatBoost берём более скромные iterations и learning_rate, чем в CV:
+    в CV была early stopping и eval_set, которые помогали выбирать оптимальное
+    число итераций. На финальном обучении eval_set'а нет, поэтому хардкодим
+    разумные значения, которые показали себя стабильно.
     """
     x_train = make_features(train_df, train_df, y, ticket_group_sizes)
     x_test = make_features(train_df, test_df, y, ticket_group_sizes)
@@ -435,21 +587,33 @@ def fit_final_model(
         model.fit(x_train, y)
         test_proba = model.predict_proba(x_test)[:, 1]
 
+    # Порог 0.5 — стандарт для бинарной классификации. Можно тюнить под
+    # F1/precision-recall, но для accuracy на сбалансированном датасете
+    # это разумное умолчание.
     test_pred = (test_proba >= 0.5).astype(int)
     return model, test_pred
 
 
 def main() -> None:
+    """Главная точка входа: CV → выбор лучшей модели → финальное обучение → submission."""
     parser = argparse.ArgumentParser(description="Train Titanic models and build Kaggle submission.")
     parser.add_argument("--data-dir", type=str, default="data")
     parser.add_argument("--artifact-dir", type=str, default="artifacts")
     parser.add_argument("--n-splits", type=int, default=5)
-    parser.add_argument("--force-model", type=str, default="", choices=["", "catboost", "rf", "et", "hgb", "mlp", "xgb", "torch", "logreg"])
+    parser.add_argument(
+        "--force-model",
+        type=str,
+        default="",
+        choices=["", "catboost", "rf", "et", "hgb", "mlp", "xgb", "torch", "logreg"],
+        help="Принудительно использовать модель для финального сабмита, минуя авто-выбор по CV.",
+    )
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
     artifact_dir = Path(args.artifact_dir)
 
+    # Импорт внутри main, чтобы при импорте модуля как библиотеки
+    # не выполнялась логика создания директорий.
     from src.common import make_artifact_dirs, load_train_test
 
     dirs = make_artifact_dirs(artifact_dir)
@@ -460,11 +624,17 @@ def main() -> None:
 
     y = train_df["Survived"].astype(int)
 
+    # Размер группы по билету считаем на полном train+test — это безопасно,
+    # потому что фича не зависит от таргета.
     ticket_group_sizes = get_ticket_group_sizes(train_df, test_df)
 
+    # CV-оценка всех моделей. Результат сохраняем в CSV, чтобы было видно
+    # историю экспериментов и можно было сравнивать запуски.
     score_df = evaluate_models(train_df, y, ticket_group_sizes, n_splits=args.n_splits)
     score_df.to_csv(report_dir / "cv_scores.csv", index=False)
 
+    # Выбор финальной модели: либо по флагу --force-model, либо лучшая по CV
+    # (таблица отсортирована по cv_accuracy_mean → cv_auc_mean).
     if args.force_model:
         best_model_name = args.force_model
     else:
@@ -479,10 +649,14 @@ def main() -> None:
         }
     )
 
+    # Сабмишен с таймстемпом, чтобы старые запуски не затирались —
+    # при ревью полезно иметь несколько версий для сравнения.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     submission_path = submission_dir / f"submission_{best_model_name}_{timestamp}.csv"
     submission.to_csv(submission_path, index=False)
 
+    # Сводный отчёт: фиксируем выбранную модель, всю CV-таблицу и
+    # путь к сабмишену. Этот JSON — главный артефакт для разбора запуска.
     model_report = {
         "selected_model": best_model_name,
         "cv_table": score_df.to_dict(orient="records"),
