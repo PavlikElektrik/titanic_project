@@ -169,7 +169,7 @@ python src/main.py --config configs/wcg/default.yaml --run-all
 - artifacts/reports/wcg_tuning_summary.json
 - artifacts/submissions/submission_*.csv
 
-Если ты готовишь проект для ревью, начни именно с `artifacts/reports/train_summary.json` и `artifacts/reports/wcg_tuning_summary.json`: в них должен быть виден смысл решений, а не только числа.
+`artifacts/reports/train_summary.json` и `artifacts/reports/wcg_tuning_summary.json`: в них должен быть виден смысл решений, а не только числа.
 
 Готовый submission загружается в Kaggle как есть.
 
